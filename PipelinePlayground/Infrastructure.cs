@@ -32,6 +32,9 @@ class BehaviorContext : IBehaviorContext
     internal IBehavior[] Behaviors { get; init; }
     public PipelineFrame Frame { get; }
 
+    [DebuggerNonUserCode]
+    [DebuggerStepThrough]
+    [DebuggerHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal TBehavior GetBehavior<TBehavior>(int index)
         where TBehavior : class, IBehavior
@@ -58,6 +61,9 @@ public sealed class PipelineFrame
     private int stackDepth;
 
     // Should be verified whether those hints are still necessary
+    [DebuggerNonUserCode]
+    [DebuggerStepThrough]
+    [DebuggerHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Push(PipelinePart[] parts, int index)
     {
@@ -71,6 +77,9 @@ public sealed class PipelineFrame
         stackDepth = d + 1;
     }
 
+    [DebuggerNonUserCode]
+    [DebuggerStepThrough]
+    [DebuggerHidden]
     // Should be verified whether those hints are still necessary
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryPop(out FrameSnapshot snapshot)
@@ -156,8 +165,15 @@ public abstract class BehaviorPart<TContext, TBehavior>(int behaviorIndex) : Pip
         var ctx = (TContext)context;
         // In Core all this stuff is on extension and some of those casts are not necessary
         var behavior = (ctx as BehaviorContext)!.GetBehavior<TBehavior>(behaviorIndex);
-        return behavior.Invoke(ctx, static ctx => StageRunners.Next(ctx));
+        return behavior.Invoke(ctx, Next);
     }
+
+    [DebuggerStepThrough]
+    [DebuggerHidden]
+    [DebuggerNonUserCode]
+    [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Task Next(TContext ctx) => StageRunners.Next(ctx);
 }
 
 // Given stages are backed into Core this logic could be moved into the corresponding stage connector base infrastucture
@@ -182,8 +198,15 @@ public abstract class StagePart<TInContext, TOutContext, TBehavior>(int stageInd
 
         return childParts.Length == 0
             ? StageRunners.Next(context)
-            : (context as BehaviorContext)!.GetBehavior<TBehavior>(stageIndex).Invoke((TInContext)context, static ctx => StageRunners.Start(ctx, ctx.Frame.Parts));
+            : (context as BehaviorContext)!.GetBehavior<TBehavior>(stageIndex).Invoke((TInContext)context, Start);
     }
+
+    [DebuggerStepThrough]
+    [DebuggerHidden]
+    [DebuggerNonUserCode]
+    [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Task Start(TOutContext ctx) => StageRunners.Start(ctx, ctx.Frame.Parts);
 }
 
 public interface IBehavior<in TInContext, out TOutContext> : IBehavior
@@ -226,6 +249,7 @@ public sealed class Stage2Behavior : IBehavior<IStage2Context, IStage2Context>
     {
         await Console.Out.WriteLineAsync("Enter Stage 2");
         await next(context);
+        throw new InvalidOperationException();
         await Console.Out.WriteLineAsync("Exit Stage 2");
     }
 }
