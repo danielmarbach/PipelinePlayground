@@ -23,10 +23,10 @@ class PipelineTests
         var stage1Parts = new PipelinePart[]
         {
             new Stage1BehaviorPart(behaviorIndex: 0),
-            new Stage1ToStage2BehaviorPart(stage2Parts),
+            new Stage1ToStage2BehaviorPart(stageIndex: 1, stage2Parts),
         };
 
-        var ctx = new Stage1Context()
+        var ctx = new Stage1Context
         {
             Behaviors = behaviors
         };

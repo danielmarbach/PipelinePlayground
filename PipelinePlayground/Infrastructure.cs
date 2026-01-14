@@ -12,14 +12,22 @@ public interface IBehaviorContext
 
 class BehaviorContext : IBehaviorContext
 {
-    internal required IBehavior[] Behaviors { get; set; } = [];
-
-    public PipelineFrame Frame { get; } = new PipelineFrame
+    protected BehaviorContext(IBehaviorContext? parent = null)
     {
-        Parts = [],
-        Index = 0,
-        Parent = null,
-    };
+        if (parent is BehaviorContext parentContext)
+        {
+            Behaviors = parentContext.Behaviors;
+            Frame = parentContext.Frame;
+        }
+        else
+        {
+            Behaviors = [];
+            Frame = new PipelineFrame();
+        }
+    }
+
+    internal IBehavior[] Behaviors { get; init; }
+    public PipelineFrame Frame { get; }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal TBehavior GetBehavior<TBehavior>(int index)
@@ -91,11 +99,36 @@ public abstract class BehaviorPart<TContext, TBehavior>(int behaviorIndex) : Pip
     where TContext : class, IBehaviorContext
     where TBehavior : class, IBehavior<TContext, TContext>
 {
-    public override Task Invoke(IBehaviorContext context)
+    public sealed override Task Invoke(IBehaviorContext context)
     {
         var ctx = (TContext)context;
         var behavior = (ctx as BehaviorContext)!.GetBehavior<TBehavior>(behaviorIndex);
         return behavior.Invoke(ctx, static ctx => StageRunners.Next(ctx));
+    }
+}
+
+public abstract class StagePart<TInContext, TOutContext, TBehavior>(int stageIndex, PipelinePart[] childParts) : PipelinePart
+    where TInContext : class, IBehaviorContext
+    where TOutContext : class, IBehaviorContext
+    where TBehavior : class, IBehavior<TInContext, TOutContext>
+{
+    public override Task Invoke(IBehaviorContext context)
+    {
+        var frame = context.Frame;
+
+        frame.Parent = new PipelineFrameSnapshot
+        {
+            Parts = frame.Parts,
+            Index = frame.Index,
+            Parent = frame.Parent
+        };
+
+        frame.Parts = childParts;
+        frame.Index = -1;
+
+        return childParts.Length == 0
+            ? StageRunners.Next(context)
+            : (context as BehaviorContext)!.GetBehavior<TBehavior>(stageIndex).Invoke((TInContext)context, static ctx => StageRunners.Next(ctx));
     }
 }
 
@@ -111,31 +144,35 @@ class Stage1Context : BehaviorContext, IStage1Context;
 
 public interface IStage2Context : IBehaviorContext;
 
-class Stage2Context : BehaviorContext, IStage2Context;
+class Stage2Context(IStage1Context context) : BehaviorContext(context), IStage2Context;
 
-public class Stage1Behavior : IBehavior<IStage1Context, IStage1Context>
+public sealed class Stage1Behavior : IBehavior<IStage1Context, IStage1Context>
 {
     public async Task Invoke(IStage1Context context, Func<IStage1Context, Task> next)
     {
+        await Console.Out.WriteLineAsync("Enter Stage 1");
         await next(context);
+        await Console.Out.WriteLineAsync("Exit Stage 1");
     }
 }
 
-class Stage1ToStage2Behavior : IBehavior<IStage1Context, IStage2Context>
+public sealed class Stage1ToStage2Behavior : IBehavior<IStage1Context, IStage2Context>
 {
     public async Task Invoke(IStage1Context context, Func<IStage2Context, Task> next)
     {
-        await next(new Stage2Context
-        {
-            Behaviors = ((BehaviorContext)context).Behaviors
-        });
+        await Console.Out.WriteLineAsync("Enter Stage 1 to Stage 2");
+        await next(new Stage2Context(context));
+        await Console.Out.WriteLineAsync("Exit Stage 1 to Stage 2");
     }
 }
 
-public class Stage2Behavior : IBehavior<IStage2Context, IStage2Context>
+public sealed class Stage2Behavior : IBehavior<IStage2Context, IStage2Context>
 {
     public async Task Invoke(IStage2Context context, Func<IStage2Context, Task> next)
     {
+        await Console.Out.WriteLineAsync("Enter Stage 2");
         await next(context);
+        await Console.Out.WriteLineAsync("Exit Stage 2");
+        await Console.Out.WriteLineAsync("Exit Stage 2");
     }
 }
