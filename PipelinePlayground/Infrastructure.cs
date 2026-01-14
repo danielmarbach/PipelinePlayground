@@ -1,13 +1,15 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace PipelinePlayground;
 
-public interface IBehavior {}
+public interface IBehavior;
 
 public interface IBehaviorContext
 {
+    // In Core this would move to extensions and not be exposed on the interface to public
     PipelineFrame Frame { get; }
 }
 
@@ -55,6 +57,7 @@ public sealed class PipelineFrame
     private FrameStack stack;
     private int stackDepth;
 
+    // Should be verified whether those hints are still necessary
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Push(PipelinePart[] parts, int index)
     {
@@ -68,6 +71,7 @@ public sealed class PipelineFrame
         stackDepth = d + 1;
     }
 
+    // Should be verified whether those hints are still necessary
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryPop(out FrameSnapshot snapshot)
     {
@@ -95,23 +99,35 @@ public abstract class PipelinePart
 
 public static class StageRunners
 {
+    [DebuggerStepThrough]
+    [DebuggerHidden]
+    [DebuggerNonUserCode]
+    [StackTraceHidden]
     public static Task Start(IBehaviorContext ctx, PipelinePart[] parts)
     {
         var frame = ctx.Frame;
         frame.Parts = parts;
         frame.Index = 0;
 
-        return parts.Length == 0 ? Complete(ctx) : parts[0].Invoke(ctx);
+        return parts.Length == 0 ? Complete(ctx) : Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), 0).Invoke(ctx);
     }
 
+    [DebuggerStepThrough]
+    [DebuggerHidden]
+    [DebuggerNonUserCode]
+    [StackTraceHidden]
     public static Task Next(IBehaviorContext ctx)
     {
         var f = ctx.Frame;
         var nextIndex = ++f.Index;
 
-        return (uint)nextIndex < (uint)f.Parts.Length ? f.Parts[nextIndex].Invoke(ctx) : Complete(ctx);
+        return (uint)nextIndex < (uint)f.Parts.Length ? Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(f.Parts), nextIndex).Invoke(ctx) : Complete(ctx);
     }
 
+    [DebuggerStepThrough]
+    [DebuggerHidden]
+    [DebuggerNonUserCode]
+    [StackTraceHidden]
     static Task Complete(IBehaviorContext ctx)
     {
         var frame = ctx.Frame;
@@ -131,20 +147,31 @@ public abstract class BehaviorPart<TContext, TBehavior>(int behaviorIndex) : Pip
     where TContext : class, IBehaviorContext
     where TBehavior : class, IBehavior<TContext, TContext>
 {
+    [DebuggerStepThrough]
+    [DebuggerHidden]
+    [DebuggerNonUserCode]
+    [StackTraceHidden]
     public sealed override Task Invoke(IBehaviorContext context)
     {
         var ctx = (TContext)context;
+        // In Core all this stuff is on extension and some of those casts are not necessary
         var behavior = (ctx as BehaviorContext)!.GetBehavior<TBehavior>(behaviorIndex);
         return behavior.Invoke(ctx, static ctx => StageRunners.Next(ctx));
     }
 }
 
+// Given stages are backed into Core this logic could be moved into the corresponding stage connector base infrastucture
+// and then we could safe another stack depth if needed.
 public abstract class StagePart<TInContext, TOutContext, TBehavior>(int stageIndex, PipelinePart[] childParts) : PipelinePart
     where TInContext : class, IBehaviorContext
     where TOutContext : class, IBehaviorContext
     where TBehavior : class, IBehavior<TInContext, TOutContext>
 {
-    public override Task Invoke(IBehaviorContext context)
+    [DebuggerStepThrough]
+    [DebuggerHidden]
+    [DebuggerNonUserCode]
+    [StackTraceHidden]
+    public sealed override Task Invoke(IBehaviorContext context)
     {
         var frame = context.Frame;
 
