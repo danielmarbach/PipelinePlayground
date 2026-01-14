@@ -124,11 +124,11 @@ public abstract class StagePart<TInContext, TOutContext, TBehavior>(int stageInd
         };
 
         frame.Parts = childParts;
-        frame.Index = -1;
+        frame.Index = 0;
 
         return childParts.Length == 0
             ? StageRunners.Next(context)
-            : (context as BehaviorContext)!.GetBehavior<TBehavior>(stageIndex).Invoke((TInContext)context, static ctx => StageRunners.Next(ctx));
+            : (context as BehaviorContext)!.GetBehavior<TBehavior>(stageIndex).Invoke((TInContext)context, static ctx => StageRunners.Start(ctx, ctx.Frame.Parts));
     }
 }
 
