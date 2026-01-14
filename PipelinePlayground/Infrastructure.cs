@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace PipelinePlayground;
@@ -36,21 +37,55 @@ class BehaviorContext : IBehaviorContext
             Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Behaviors), index));
 }
 
+public readonly record struct FrameSnapshot(PipelinePart[] Parts, int Index);
+
+[InlineArray(MaxDepth)]
+public struct FrameStack
+{
+    public const int MaxDepth = 8; // this is well known
+
+    private FrameSnapshot _element0;
+}
 
 public sealed class PipelineFrame
 {
     public PipelinePart[] Parts = [];
     public int Index;
 
-    // Stack for connectors
-    public PipelineFrameSnapshot? Parent;
-}
+    private FrameStack stack;
+    private int stackDepth;
 
-public sealed class PipelineFrameSnapshot
-{
-    public required PipelinePart[] Parts;
-    public required int Index;
-    public PipelineFrameSnapshot? Parent;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Push(PipelinePart[] parts, int index)
+    {
+        var d = stackDepth;
+        if ((uint)d >= FrameStack.MaxDepth)
+        {
+            ThrowOverflow();
+        }
+
+        stack[d] = new FrameSnapshot(parts, index);
+        stackDepth = d + 1;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryPop(out FrameSnapshot snapshot)
+    {
+        var d = stackDepth;
+        if (d == 0)
+        {
+            snapshot = default;
+            return false;
+        }
+
+        d--;
+        snapshot = stack[d];
+        stackDepth = d;
+        return true;
+    }
+
+    [DoesNotReturn]
+    private static void ThrowOverflow() => throw new InvalidOperationException($"Pipeline frame stack overflow. MaxDepth={FrameStack.MaxDepth}.");
 }
 
 public abstract class PipelinePart
@@ -62,9 +97,9 @@ public static class StageRunners
 {
     public static Task Start(IBehaviorContext ctx, PipelinePart[] parts)
     {
-        var f = ctx.Frame;
-        f.Parts = parts;
-        f.Index = 0;
+        var frame = ctx.Frame;
+        frame.Parts = parts;
+        frame.Index = 0;
 
         return parts.Length == 0 ? Complete(ctx) : parts[0].Invoke(ctx);
     }
@@ -79,17 +114,14 @@ public static class StageRunners
 
     static Task Complete(IBehaviorContext ctx)
     {
-        var f = ctx.Frame;
-        var parent = f.Parent;
-
-        if (parent is null)
+        var frame = ctx.Frame;
+        if (!frame.TryPop(out var frameSnapshot))
         {
             return Task.CompletedTask;
         }
 
-        f.Parts = parent.Parts;
-        f.Index = parent.Index;
-        f.Parent = parent.Parent;
+        frame.Parts = frameSnapshot.Parts;
+        frame.Index = frameSnapshot.Index;
 
         return Next(ctx);
     }
@@ -116,12 +148,7 @@ public abstract class StagePart<TInContext, TOutContext, TBehavior>(int stageInd
     {
         var frame = context.Frame;
 
-        frame.Parent = new PipelineFrameSnapshot
-        {
-            Parts = frame.Parts,
-            Index = frame.Index,
-            Parent = frame.Parent
-        };
+        frame.Push(frame.Parts, frame.Index);
 
         frame.Parts = childParts;
         frame.Index = 0;
@@ -172,7 +199,6 @@ public sealed class Stage2Behavior : IBehavior<IStage2Context, IStage2Context>
     {
         await Console.Out.WriteLineAsync("Enter Stage 2");
         await next(context);
-        await Console.Out.WriteLineAsync("Exit Stage 2");
         await Console.Out.WriteLineAsync("Exit Stage 2");
     }
 }
