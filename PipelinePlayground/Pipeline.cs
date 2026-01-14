@@ -4,125 +4,33 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace PipelinePlayground;
 
-// Can give richer information about the pipeline part
-public abstract class PipelinePartDescriptor
+public sealed class Stage1BehaviorPart(int behaviorIndex) : BehaviorPart<IStage1Context, Stage1Behavior>(behaviorIndex);
+
+public sealed class Stage2BehaviorPart(int behaviorIndex) : BehaviorPart<IStage2Context, Stage2Behavior>(behaviorIndex);
+
+public sealed class Stage1ToStage2BehaviorPart(PipelinePart[] childParts) : PipelinePart
 {
-    public abstract void Initialize(IServiceProvider serviceProvider);
-
-    public abstract Task Invoke(IBehaviorContext context, Func<IBehaviorContext, Task> next);
-}
-
-// For reflection stuff
-// Source can generate these
-class PipelinePartDescriptor<TBehavior>(Func<IBehaviorContext, Func<IBehaviorContext, Task>, Task> invoker) : PipelinePartDescriptor
-    where TBehavior : IBehavior
-{
-    private TBehavior? behavior;
-
-    public override void Initialize(IServiceProvider serviceProvider)
+    public override Task Invoke(IBehaviorContext context)
     {
-        // would use activator utilities in real implementation
-        behavior = (TBehavior)serviceProvider.GetRequiredService(typeof(TBehavior));
-    }
+        var frame = context.Frame;
 
-    [StackTraceHidden]
-    [DebuggerStepThrough]
-    [DebuggerNonUserCode]
-    [DebuggerHidden]
-    public override Task Invoke(IBehaviorContext context, Func<IBehaviorContext, Task> next)
-    {
-        ArgumentNullException.ThrowIfNull(behavior);
-
-        return invoker(context, next);
-    }
-}
-
-
-class PipelinePart1 : IEnumerable<PipelinePartDescriptor>
-{
-    public IEnumerator<PipelinePartDescriptor> GetEnumerator()
-    {
-        yield return new Stage1PipelinePartDescriptor();
-        yield return new Stage1ToStage2BehaviorPartDescriptor();
-    }
-
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        return GetEnumerator();
-    }
-
-    [DebuggerStepThrough]
-    [DebuggerNonUserCode]
-    sealed class Stage1PipelinePartDescriptor : PipelinePartDescriptor
-    {
-        Stage1Behavior? behavior;
-
-        public override void Initialize(IServiceProvider serviceProvider)
+        frame.Parent = new PipelineFrameSnapshot
         {
-            behavior = serviceProvider.GetRequiredService<Stage1Behavior>();
-        }
+            Parts = frame.Parts,
+            Index = frame.Index,
+            Parent = frame.Parent
+        };
 
-        [StackTraceHidden]
-        [DebuggerStepThrough]
-        [DebuggerNonUserCode]
-        public override Task Invoke(IBehaviorContext context, Func<IBehaviorContext, Task> next)
+        frame.Parts = childParts;
+        frame.Index = 0;
+
+        var nextContext = new Stage2Context
         {
-            ArgumentNullException.ThrowIfNull(behavior);
-            return behavior.Invoke((IStage1Context)context, next);
-        }
-    }
+            Behaviors = ((BehaviorContext)context).Behaviors
+        };
 
-    [DebuggerStepThrough]
-    [DebuggerNonUserCode]
-    sealed class Stage1ToStage2BehaviorPartDescriptor : PipelinePartDescriptor
-    {
-        Stage1ToStage2Behavior? behavior;
-
-        public override void Initialize(IServiceProvider serviceProvider)
-        {
-            behavior = serviceProvider.GetRequiredService<Stage1ToStage2Behavior>();
-        }
-
-        [StackTraceHidden]
-        [DebuggerStepThrough]
-        [DebuggerNonUserCode]
-        public override Task Invoke(IBehaviorContext context, Func<IBehaviorContext, Task> next)
-        {
-            ArgumentNullException.ThrowIfNull(behavior);
-            return behavior.Invoke((IStage1Context)context, next);
-        }
-    }
-}
-
-class PipelinePart2 : IEnumerable<PipelinePartDescriptor>
-{
-    public IEnumerator<PipelinePartDescriptor> GetEnumerator()
-    {
-        // ordering within the same assembly can be guaranteed by the order here potentially or be returned by returning a richer object
-        yield return new Stage2PipelinePartDescriptor();
-    }
-
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        return GetEnumerator();
-    }
-
-    [DebuggerStepThrough]
-    [DebuggerNonUserCode]
-    sealed class Stage2PipelinePartDescriptor : PipelinePartDescriptor
-    {
-        Stage2Behavior? behavior;
-
-        public override void Initialize(IServiceProvider serviceProvider)
-        {
-            behavior = serviceProvider.GetRequiredService<Stage2Behavior>();
-        }
-
-        [StackTraceHidden]
-        public override Task Invoke(IBehaviorContext context, Func<IBehaviorContext, Task> next)
-        {
-            ArgumentNullException.ThrowIfNull(behavior);
-            return behavior.Invoke((IStage2Context)context, next);
-        }
+        return childParts.Length == 0
+            ? StageRunners.Next(nextContext)
+            : childParts[0].Invoke(nextContext);
     }
 }
