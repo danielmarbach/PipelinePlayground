@@ -6,6 +6,35 @@ namespace PipelinePlayground;
 class PipelineTests
 {
     [Test]
+    [TestCase(20, false)]
+    [TestCase(20, true)]
+    [TestCase(40, false)]
+    [TestCase(40, true)]
+    public async Task Depth(int depth, bool @throw)
+    {
+        var behaviors = new IBehavior[depth + (@throw ? 1 : 0)];
+        var parts = new PipelinePart[depth + (@throw ? 1 : 0)];
+
+        for (var i = 0; i < depth; i++)
+        {
+            behaviors[i] = new LevelBehavior(i);
+            parts[i] = new LevelBehaviorPart(i);
+        }
+
+        if (@throw)
+        {
+            behaviors[depth] = new ThrowBehavior(depth);
+            parts[depth] = new ThrowBehaviorPart(depth);
+        }
+
+        var ctx = new Stage1Context
+        {
+            Behaviors = behaviors
+        };
+        await StageRunners.Start(ctx, parts);
+    }
+
+    [Test]
     public async Task Foo()
     {
         var behaviors = new IBehavior[]

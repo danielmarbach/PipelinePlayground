@@ -223,6 +223,25 @@ public interface IStage2Context : IBehaviorContext;
 
 class Stage2Context(IStage1Context context) : BehaviorContext(context), IStage2Context;
 
+public sealed class ThrowBehavior(int level) : IBehavior<IStage1Context, IStage1Context>
+{
+    public async Task Invoke(IStage1Context context, Func<IStage1Context, Task> next)
+    {
+        await Console.Out.WriteLineAsync($"Enter ThrowBehavior {level}");
+        throw  new Exception();
+    }
+}
+
+public sealed class LevelBehavior(int level) : IBehavior<IStage1Context, IStage1Context>
+{
+    public async Task Invoke(IStage1Context context, Func<IStage1Context, Task> next)
+    {
+        await Console.Out.WriteLineAsync($"Enter Stage {level}");
+        await next(context);
+        await Console.Out.WriteLineAsync($"Exit Stage {level}");
+    }
+}
+
 public sealed class Stage1Behavior : IBehavior<IStage1Context, IStage1Context>
 {
     public async Task Invoke(IStage1Context context, Func<IStage1Context, Task> next)
@@ -249,7 +268,6 @@ public sealed class Stage2Behavior : IBehavior<IStage2Context, IStage2Context>
     {
         await Console.Out.WriteLineAsync("Enter Stage 2");
         await next(context);
-        throw new InvalidOperationException();
         await Console.Out.WriteLineAsync("Exit Stage 2");
     }
 }
