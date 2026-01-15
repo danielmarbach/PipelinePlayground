@@ -7,11 +7,7 @@ namespace PipelinePlayground;
 
 public interface IBehavior;
 
-public interface IBehaviorContext
-{
-    // In Core this would move to extensions and not be exposed on the interface to public
-    PipelineFrame Frame { get; }
-}
+public interface IBehaviorContext;
 
 class BehaviorContext : IBehaviorContext
 {
@@ -30,7 +26,7 @@ class BehaviorContext : IBehaviorContext
     }
 
     internal IBehavior[] Behaviors { get; init; }
-    public PipelineFrame Frame { get; }
+    internal PipelineFrame Frame;
 
     [DebuggerNonUserCode]
     [DebuggerStepThrough]
@@ -53,13 +49,17 @@ public struct FrameStack
 }
 
 [SkipLocalsInit]
-public sealed class PipelineFrame
+public struct PipelineFrame
 {
     public PipelinePart[] Parts = [];
-    public int Index;
+    public int Index = 0;
 
-    private FrameStack stack;
-    private int stackDepth;
+    private FrameStack stack = default;
+    private int stackDepth = 0;
+
+    public PipelineFrame()
+    {
+    }
 
     // Should be verified whether those hints are still necessary
     [DebuggerNonUserCode]
@@ -115,7 +115,8 @@ public static class StageRunners
     [StackTraceHidden]
     public static Task Start(IBehaviorContext ctx, PipelinePart[] parts)
     {
-        var frame = ctx.Frame;
+        var context = Unsafe.As<BehaviorContext>(ctx);
+        scoped ref var frame = ref context.Frame;
         frame.Parts = parts;
         frame.Index = 0;
 
@@ -128,9 +129,10 @@ public static class StageRunners
     [StackTraceHidden]
     public static Task Next(IBehaviorContext ctx)
     {
-        var f = ctx.Frame;
-        var parts = f.Parts;
-        var nextIndex = ++f.Index;
+        var context = Unsafe.As<BehaviorContext>(ctx);
+        scoped ref var frame = ref context.Frame;
+        var parts = frame.Parts;
+        var nextIndex = ++frame.Index;
 
         return (uint)nextIndex >= (uint)parts.Length ? Complete(ctx) : Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), nextIndex).Invoke(ctx);
     }
@@ -141,7 +143,8 @@ public static class StageRunners
     [StackTraceHidden]
     static Task Complete(IBehaviorContext ctx)
     {
-        var frame = ctx.Frame;
+        var context = Unsafe.As<BehaviorContext>(ctx);
+        scoped ref var frame = ref context.Frame;
         if (!frame.TryPop(out var frameSnapshot))
         {
             return Task.CompletedTask;
@@ -168,7 +171,7 @@ public abstract class BehaviorPart<TContext, TBehavior>(int behaviorIndex) : Pip
     {
         var ctx = (TContext)context;
         // In Core all this stuff is on extension and some of those casts are not necessary
-        var behavior = (ctx as BehaviorContext)!.GetBehavior<TBehavior>(behaviorIndex);
+        var behavior = Unsafe.As<BehaviorContext>(ctx).GetBehavior<TBehavior>(behaviorIndex);
         return behavior.Invoke(ctx, CachedNext);
     }
 
@@ -193,7 +196,8 @@ public abstract class StagePart<TInContext, TOutContext, TBehavior>(int stageInd
     [StackTraceHidden]
     public sealed override Task Invoke(IBehaviorContext context)
     {
-        var frame = context.Frame;
+        var ctx = Unsafe.As<BehaviorContext>(context);
+        scoped ref var frame = ref ctx.Frame;
 
         frame.Push(frame.Parts, frame.Index);
 
@@ -202,7 +206,7 @@ public abstract class StagePart<TInContext, TOutContext, TBehavior>(int stageInd
 
         return childParts.Length == 0
             ? StageRunners.Next(context)
-            : (context as BehaviorContext)!.GetBehavior<TBehavior>(stageIndex).Invoke((TInContext)context, Start);
+            : ctx.GetBehavior<TBehavior>(stageIndex).Invoke(Unsafe.As<TInContext>(context), Start);
     }
 
     [DebuggerStepThrough]
@@ -210,7 +214,12 @@ public abstract class StagePart<TInContext, TOutContext, TBehavior>(int stageInd
     [DebuggerNonUserCode]
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Task Start(TOutContext ctx) => StageRunners.Start(ctx, ctx.Frame.Parts);
+    private static Task Start(TOutContext ctx)
+    {
+        var context = Unsafe.As<BehaviorContext>(ctx);
+        scoped ref var frame = ref context.Frame;
+        return StageRunners.Start(context, frame.Parts);
+    }
 }
 
 public interface IBehavior<in TInContext, out TOutContext> : IBehavior
