@@ -52,6 +52,7 @@ public struct FrameStack
     private FrameSnapshot _element0;
 }
 
+[SkipLocalsInit]
 public sealed class PipelineFrame
 {
     public PipelinePart[] Parts = [];
@@ -128,9 +129,10 @@ public static class StageRunners
     public static Task Next(IBehaviorContext ctx)
     {
         var f = ctx.Frame;
+        var parts = f.Parts;
         var nextIndex = ++f.Index;
 
-        return (uint)nextIndex < (uint)f.Parts.Length ? Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(f.Parts), nextIndex).Invoke(ctx) : Complete(ctx);
+        return (uint)nextIndex >= (uint)parts.Length ? Complete(ctx) : Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), nextIndex).Invoke(ctx);
     }
 
     [DebuggerStepThrough]
@@ -156,6 +158,8 @@ public abstract class BehaviorPart<TContext, TBehavior>(int behaviorIndex) : Pip
     where TContext : class, IBehaviorContext
     where TBehavior : class, IBehavior<TContext, TContext>
 {
+    private static readonly Func<TContext, Task> CachedNext = Next;
+
     [DebuggerStepThrough]
     [DebuggerHidden]
     [DebuggerNonUserCode]
@@ -165,7 +169,7 @@ public abstract class BehaviorPart<TContext, TBehavior>(int behaviorIndex) : Pip
         var ctx = (TContext)context;
         // In Core all this stuff is on extension and some of those casts are not necessary
         var behavior = (ctx as BehaviorContext)!.GetBehavior<TBehavior>(behaviorIndex);
-        return behavior.Invoke(ctx, Next);
+        return behavior.Invoke(ctx, CachedNext);
     }
 
     [DebuggerStepThrough]
