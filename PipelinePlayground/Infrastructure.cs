@@ -113,6 +113,7 @@ public static class StageRunners
     [DebuggerHidden]
     [DebuggerNonUserCode]
     [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Task Start(IBehaviorContext ctx, PipelinePart[] parts)
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
@@ -127,6 +128,7 @@ public static class StageRunners
     [DebuggerHidden]
     [DebuggerNonUserCode]
     [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Task Next(IBehaviorContext ctx)
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
@@ -167,6 +169,7 @@ public abstract class BehaviorPart<TContext, TBehavior>(int behaviorIndex) : Pip
     [DebuggerHidden]
     [DebuggerNonUserCode]
     [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public sealed override Task Invoke(IBehaviorContext context)
     {
         var ctx = (TContext)context;
