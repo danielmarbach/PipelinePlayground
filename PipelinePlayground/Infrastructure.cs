@@ -71,8 +71,7 @@ public static class StageRunners
     [DebuggerNonUserCode]
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task Next<TContext>(TContext ctx)
-        where TContext : class, IBehaviorContext
+    public static Task Next(IBehaviorContext ctx)
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
         var parts = context.Parts;
