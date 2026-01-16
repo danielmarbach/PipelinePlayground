@@ -14,10 +14,10 @@ public static class Pipeline
     {
         var context = Unsafe.As<Stage1Context>(ctx);
         var behavior = context.GetBehavior<Stage1Behavior>(index);
-        return behavior.Invoke(context, Stage1CachedNext);
+        return behavior.Invoke(context, CachedNext);
     }
 
-    private static readonly Func<IStage1Context, Task> Stage1CachedNext = StageRunners.Next;
+    private static readonly Func<IBehaviorContext, Task> CachedNext = StageRunners.Next;
 
     [DebuggerStepThrough]
     [DebuggerHidden]
@@ -28,7 +28,7 @@ public static class Pipeline
     {
         var context = Unsafe.As<Stage1Context>(ctx);
         var behavior = context.GetBehavior<Stage1ToStage2Behavior>(index);
-        return behavior.Invoke(context, Stage2CachedNext);
+        return behavior.Invoke(context, CachedNext);
     }
 
     [DebuggerStepThrough]
@@ -40,8 +40,6 @@ public static class Pipeline
     {
         var context = Unsafe.As<Stage2Context>(ctx);
         var behavior = context.GetBehavior<Stage2Behavior>(index);
-        return behavior.Invoke(context, Stage2CachedNext);
+        return behavior.Invoke(context, CachedNext);
     }
-
-    private static readonly Func<IStage2Context, Task> Stage2CachedNext = StageRunners.Next;
 }
