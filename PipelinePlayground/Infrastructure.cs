@@ -57,13 +57,7 @@ public static class StageRunners
         context.Parts = parts;
         context.CurrentIndex = 0;
 
-        if (parts.Length == 0)
-        {
-            return Task.CompletedTask;
-        }
-
-        scoped ref var part = ref MemoryMarshal.GetArrayDataReference(parts);
-        return part.Invoke(ctx, 0, parts);
+        return parts.Length == 0 ? Task.CompletedTask : MemoryMarshal.GetArrayDataReference(parts).Invoke(ctx, 0, parts);
     }
 
     [DebuggerStepThrough]
@@ -77,13 +71,7 @@ public static class StageRunners
         var parts = context.Parts;
         var nextIndex = ++context.CurrentIndex;
 
-        if ((uint)nextIndex >= (uint)parts.Length)
-        {
-            return Task.CompletedTask;
-        }
-
-        scoped ref var part = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), nextIndex);
-        return part.Invoke(ctx, nextIndex, parts);
+        return (uint)nextIndex >= (uint)parts.Length ? Task.CompletedTask : Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), nextIndex).Invoke(ctx, nextIndex, parts);
     }
 }
 

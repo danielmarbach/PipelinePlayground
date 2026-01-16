@@ -46,9 +46,9 @@ class PipelineTests
 
         var parts = new[]
         {
-            new PipelinePart(BehaviorPart<IStage1Context, Stage1Behavior>.Invoke),
-            new PipelinePart(StagePart<IStage1Context, IStage2Context, Stage1ToStage2Behavior>.Invoke, NextStageStartIndex: 2),
-            new PipelinePart(BehaviorPart<IStage2Context, Stage2Behavior>.Invoke)
+            new PipelinePart(Pipeline.Stage1Behavior),
+            new PipelinePart(Pipeline.Stage1ToStage2Behavior, NextStageStartIndex: 2),
+            new PipelinePart(Pipeline.Stage2Behavior),
         };
 
         var ctx = new Stage1Context
