@@ -18,13 +18,13 @@ class PipelineTests
         for (var i = 0; i < depth; i++)
         {
             behaviors[i] = new LevelBehavior(i);
-            parts[i] = new PipelinePart(BehaviorPart<IStage1Context, LevelBehavior>.Invoke);
+            parts[i] = new LevelBehaviorPart();
         }
 
         if (@throw)
         {
             behaviors[depth] = new ThrowBehavior(depth);
-            parts[depth] = new PipelinePart(BehaviorPart<IStage1Context, ThrowBehavior>.Invoke);
+            parts[depth] = new ThrowBehaviorPart();
         }
 
         var ctx = new Stage1Context
@@ -44,11 +44,11 @@ class PipelineTests
             new Stage2Behavior()          // index 2
         };
 
-        var parts = new[]
+        var parts = new PipelinePart[]
         {
-            new PipelinePart(Pipeline.Stage1Behavior),
-            new PipelinePart(Pipeline.Stage1ToStage2Behavior, NextStageStartIndex: 2),
-            new PipelinePart(Pipeline.Stage2Behavior),
+            new Stage1BehaviorPart(),                      // index 0
+            new Stage1ToStage2BehaviorPart(nextStageStartIndex: 2), // index 1 - next stage starts at 2
+            new Stage2BehaviorPart()                       // index 2
         };
 
         var ctx = new Stage1Context

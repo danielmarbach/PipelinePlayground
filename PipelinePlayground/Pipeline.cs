@@ -1,45 +1,10 @@
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
-
 namespace PipelinePlayground;
 
-public static class Pipeline
-{
-    [DebuggerStepThrough]
-    [DebuggerHidden]
-    [DebuggerNonUserCode]
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task Stage1Behavior(IBehaviorContext ctx, int index, PipelinePart[] parts)
-    {
-        var context = Unsafe.As<Stage1Context>(ctx);
-        var behavior = context.GetBehavior<Stage1Behavior>(index);
-        return behavior.Invoke(context, CachedNext);
-    }
+public sealed class ThrowBehaviorPart : BehaviorPart<IStage1Context, ThrowBehavior>;
+public sealed class LevelBehaviorPart : BehaviorPart<IStage1Context, LevelBehavior>;
 
-    private static readonly Func<IBehaviorContext, Task> CachedNext = StageRunners.Next;
+public sealed class Stage1BehaviorPart : BehaviorPart<IStage1Context, Stage1Behavior>;
 
-    [DebuggerStepThrough]
-    [DebuggerHidden]
-    [DebuggerNonUserCode]
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task Stage1ToStage2Behavior(IBehaviorContext ctx, int index, PipelinePart[] parts)
-    {
-        var context = Unsafe.As<Stage1Context>(ctx);
-        var behavior = context.GetBehavior<Stage1ToStage2Behavior>(index);
-        return behavior.Invoke(context, CachedNext);
-    }
+public sealed class Stage2BehaviorPart : BehaviorPart<IStage2Context, Stage2Behavior>;
 
-    [DebuggerStepThrough]
-    [DebuggerHidden]
-    [DebuggerNonUserCode]
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task Stage2Behavior(IBehaviorContext ctx, int index, PipelinePart[] parts)
-    {
-        var context = Unsafe.As<Stage2Context>(ctx);
-        var behavior = context.GetBehavior<Stage2Behavior>(index);
-        return behavior.Invoke(context, CachedNext);
-    }
-}
+public sealed class Stage1ToStage2BehaviorPart(int nextStageStartIndex) : StagePart<IStage1Context, IStage2Context, Stage1ToStage2Behavior>(nextStageStartIndex);

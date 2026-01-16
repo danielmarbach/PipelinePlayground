@@ -40,9 +40,10 @@ class BehaviorContext : IBehaviorContext
             Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Behaviors), index));
 }
 
-public readonly record struct PipelinePart(
-    Func<IBehaviorContext, int, PipelinePart[], Task> Invoke,
-    int NextStageStartIndex = -1);
+public abstract class PipelinePart
+{
+    public abstract Task Invoke(IBehaviorContext context);
+}
 
 public static class StageRunners
 {
@@ -57,7 +58,9 @@ public static class StageRunners
         context.Parts = parts;
         context.CurrentIndex = 0;
 
-        return parts.Length == 0 ? Task.CompletedTask : MemoryMarshal.GetArrayDataReference(parts).Invoke(ctx, 0, parts);
+        return parts.Length == 0
+            ? Task.CompletedTask
+            : Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), 0).Invoke(ctx);
     }
 
     [DebuggerStepThrough]
@@ -71,55 +74,51 @@ public static class StageRunners
         var parts = context.Parts;
         var nextIndex = ++context.CurrentIndex;
 
-        return (uint)nextIndex >= (uint)parts.Length ? Task.CompletedTask : Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), nextIndex).Invoke(ctx, nextIndex, parts);
+        return (uint)nextIndex >= (uint)parts.Length
+            ? Task.CompletedTask
+            : Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), nextIndex).Invoke(ctx);
     }
+
+    public static Func<IBehaviorContext, Task> CachedNext => Next;
 }
 
-public static class BehaviorPart<TContext, TBehavior>
+public abstract class BehaviorPart<TContext, TBehavior> : PipelinePart
     where TContext : class, IBehaviorContext
     where TBehavior : class, IBehavior<TContext, TContext>
 {
-    private static readonly Func<TContext, Task> CachedNext = StageRunners.Next;
-
     [DebuggerStepThrough]
     [DebuggerHidden]
     [DebuggerNonUserCode]
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task Invoke(IBehaviorContext context, int index, PipelinePart[] parts)
+    public sealed override Task Invoke(IBehaviorContext context)
     {
         var ctx = Unsafe.As<BehaviorContext>(context);
-        var behavior = ctx.GetBehavior<TBehavior>(index);
-        return behavior.Invoke(Unsafe.As<TContext>(context), CachedNext);
+        var behavior = ctx.GetBehavior<TBehavior>(ctx.CurrentIndex);
+        return behavior.Invoke(Unsafe.As<TContext>(context), StageRunners.CachedNext);
     }
 }
 
 /// <summary>
-/// Stage transition part. The nextStageStartIndex is stored in the PipelinePart struct.
+/// Stage transition part. The nextStageStartIndex indicates where the next stage begins in the parts array.
 /// </summary>
-public static class StagePart<TInContext, TOutContext, TBehavior>
+public abstract class StagePart<TInContext, TOutContext, TBehavior>(int nextStageStartIndex) : PipelinePart
     where TInContext : class, IBehaviorContext
     where TOutContext : class, IBehaviorContext
     where TBehavior : class, IBehavior<TInContext, TOutContext>
 {
-    private static readonly Func<TOutContext, Task> CachedNext = StageRunners.Next;
-
     [DebuggerStepThrough]
     [DebuggerHidden]
     [DebuggerNonUserCode]
     [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task Invoke(IBehaviorContext context, int index, PipelinePart[] parts)
+    public sealed override Task Invoke(IBehaviorContext context)
     {
         var ctx = Unsafe.As<BehaviorContext>(context);
-        var behavior = ctx.GetBehavior<TBehavior>(index);
+        var behavior = ctx.GetBehavior<TBehavior>(ctx.CurrentIndex);
+        // Set the next stage start index so the cached delegate knows where to jump
+        ctx.CurrentIndex = nextStageStartIndex - 1; // -1 because Next will increment
 
-        // Get the next stage start index from the current part
-        scoped ref var currentPart = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), index);
-        // Set the index to nextStageStartIndex - 1 because Next will increment
-        ctx.CurrentIndex = currentPart.NextStageStartIndex - 1;
-
-        return behavior.Invoke(Unsafe.As<TInContext>(context), CachedNext);
+        return behavior.Invoke(Unsafe.As<TInContext>(context), StageRunners.CachedNext);
     }
 }
 
