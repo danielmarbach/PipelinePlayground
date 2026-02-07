@@ -9,9 +9,9 @@ public interface IBehavior;
 
 public interface IBehaviorContext;
 
-class BehaviorContext : IBehaviorContext
+public class BehaviorContext : IBehaviorContext
 {
-    protected BehaviorContext(IBehaviorContext? parent = null)
+    public BehaviorContext(IBehaviorContext? parent = null)
     {
         if (parent is BehaviorContext parentContext)
         {
@@ -188,6 +188,19 @@ public static class StageRunners
 
 public static class BehaviorPartFactory
 {
+    private static class Cache<TContext, TBehavior>
+        where TContext : class, IBehaviorContext
+        where TBehavior : class, IBehavior<TContext, TContext>
+    {
+        public static readonly Func<IBehaviorContext, int, PipelinePart[], Task> Invoke =
+            static (ctx, index, _) =>
+            {
+                var context = Unsafe.As<BehaviorContext>(ctx);
+                var behavior = context.GetBehavior<TBehavior>(index);
+                return behavior.Invoke(Unsafe.As<TContext>(ctx), StageRunners.Next);
+            };
+    }
+
     [DebuggerStepThrough]
     [DebuggerHidden]
     [DebuggerNonUserCode]
@@ -197,14 +210,7 @@ public static class BehaviorPartFactory
         where TContext : class, IBehaviorContext
         where TBehavior : class, IBehavior<TContext, TContext>
     {
-        return new PipelinePart(
-            static (ctx, index, _) =>
-            {
-                var context = Unsafe.As<BehaviorContext>(ctx);
-                var behavior = context.GetBehavior<TBehavior>(index);
-                return behavior.Invoke(Unsafe.As<TContext>(ctx), StageRunners.NextUnrolled4);
-            },
-            behaviorIndex);
+        return new PipelinePart(Cache<TContext, TBehavior>.Invoke, behaviorIndex);
     }
 }
 
