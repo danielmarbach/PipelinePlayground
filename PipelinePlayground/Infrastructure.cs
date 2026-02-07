@@ -148,6 +148,24 @@ public static class StageRunners
         return part.Invoke(ctx, part.BehaviorIndex, part.ChildParts ?? []);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Task NextUnrolled4(IBehaviorContext ctx)
+    {
+        var context = Unsafe.As<BehaviorContext>(ctx);
+        scoped ref var frame = ref context.Frame;
+        var parts = frame.Parts;
+        var nextIndex = ++frame.Index;
+
+        // Unrolled for first 4 indices - eliminates bounds check on predictable path
+        if (nextIndex == 0) return parts[0].Invoke(ctx, parts[0].BehaviorIndex, parts[0].ChildParts ?? []);
+        if (nextIndex == 1) return parts[1].Invoke(ctx, parts[1].BehaviorIndex, parts[1].ChildParts ?? []);
+        if (nextIndex == 2) return parts[2].Invoke(ctx, parts[2].BehaviorIndex, parts[2].ChildParts ?? []);
+        if (nextIndex == 3) return parts[3].Invoke(ctx, parts[3].BehaviorIndex, parts[3].ChildParts ?? []);
+
+        // Fall back to regular path for deeper pipelines
+        return Next(ctx);
+    }
+
     [DebuggerStepThrough]
     [DebuggerHidden]
     [DebuggerNonUserCode]
@@ -164,7 +182,7 @@ public static class StageRunners
         frame.Parts = frameSnapshot.Parts;
         frame.Index = frameSnapshot.Index;
 
-        return Next(ctx);
+        return NextUnrolled4(ctx);
     }
 }
 
@@ -184,7 +202,7 @@ public static class BehaviorPartFactory
             {
                 var context = Unsafe.As<BehaviorContext>(ctx);
                 var behavior = context.GetBehavior<TBehavior>(index);
-                return behavior.Invoke(Unsafe.As<TContext>(ctx), StageRunners.Next);
+                return behavior.Invoke(Unsafe.As<TContext>(ctx), StageRunners.NextUnrolled4);
             },
             behaviorIndex);
     }
@@ -241,7 +259,7 @@ public static class StagePartFactory
                 frame.Index = 0;
 
                 return childParts.Length == 0
-                    ? StageRunners.Next(ctx)
+                    ? StageRunners.NextUnrolled4(ctx)
                     : context.GetBehavior<TBehavior>(index).Invoke(Unsafe.As<TInContext>(ctx), Start);
             },
             stageIndex, childParts);
