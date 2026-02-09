@@ -214,33 +214,6 @@ public static class BehaviorPartFactory
     }
 }
 
-// public abstract class BehaviorPart<TContext, TBehavior>(int behaviorIndex) : PipelinePart
-//     where TContext : class, IBehaviorContext
-//     where TBehavior : class, IBehavior<TContext, TContext>
-// {
-//     private static readonly Func<TContext, Task> CachedNext = Next;
-//
-//     [DebuggerStepThrough]
-//     [DebuggerHidden]
-//     [DebuggerNonUserCode]
-//     [StackTraceHidden]
-//     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-//     public sealed override Task Invoke(IBehaviorContext context)
-//     {
-//         var ctx = (TContext)context;
-//         // In Core all this stuff is on extension and some of those casts are not necessary
-//         var behavior = Unsafe.As<BehaviorContext>(ctx).GetBehavior<TBehavior>(behaviorIndex);
-//         return behavior.Invoke(ctx, CachedNext);
-//     }
-//
-//     [DebuggerStepThrough]
-//     [DebuggerHidden]
-//     [DebuggerNonUserCode]
-//     [StackTraceHidden]
-//     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-//     private static Task Next(TContext ctx) => StageRunners.Next(ctx);
-// }
-
 public static class StagePartFactory
 {
     [DebuggerStepThrough]
@@ -284,45 +257,6 @@ public static class StagePartFactory
         return StageRunners.Start(context, frame.Parts);
     }
 }
-
-// Given stages are backed into Core this logic could be moved into the corresponding stage connector base infrastucture
-// and then we could safe another stack depth if needed.
-// public abstract class StagePart<TInContext, TOutContext, TBehavior>(int stageIndex, PipelinePart[] childParts) : PipelinePart
-//     where TInContext : class, IBehaviorContext
-//     where TOutContext : class, IBehaviorContext
-//     where TBehavior : class, IBehavior<TInContext, TOutContext>
-// {
-//     [DebuggerStepThrough]
-//     [DebuggerHidden]
-//     [DebuggerNonUserCode]
-//     [StackTraceHidden]
-//     public sealed override Task Invoke(IBehaviorContext context)
-//     {
-//         var ctx = Unsafe.As<BehaviorContext>(context);
-//         scoped ref var frame = ref ctx.Frame;
-//
-//         frame.Push(frame.Parts, frame.Index);
-//
-//         frame.Parts = childParts;
-//         frame.Index = 0;
-//
-//         return childParts.Length == 0
-//             ? StageRunners.Next(context)
-//             : ctx.GetBehavior<TBehavior>(stageIndex).Invoke(Unsafe.As<TInContext>(context), Start);
-//     }
-//
-//     [DebuggerStepThrough]
-//     [DebuggerHidden]
-//     [DebuggerNonUserCode]
-//     [StackTraceHidden]
-//     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-//     private static Task Start(TOutContext ctx)
-//     {
-//         var context = Unsafe.As<BehaviorContext>(ctx);
-//         scoped ref var frame = ref context.Frame;
-//         return StageRunners.Start(context, frame.Parts);
-//     }
-// }
 
 public interface IBehavior<in TInContext, out TOutContext> : IBehavior
     where TInContext : IBehaviorContext
