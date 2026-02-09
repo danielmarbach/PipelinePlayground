@@ -18,13 +18,13 @@ class PipelineTests
         for (var i = 0; i < depth; i++)
         {
             behaviors[i] = new LevelBehavior(i);
-            parts[i] = BehaviorPartFactory.Create<IStage1Context, LevelBehavior>(i);
+            parts[i] = BehaviorPartFactory.Create<IStage1Context, LevelBehavior>();
         }
 
         if (@throw)
         {
             behaviors[depth] = new ThrowBehavior(depth);
-            parts[depth] = BehaviorPartFactory.Create<IStage1Context, ThrowBehavior>(depth);
+            parts[depth] = BehaviorPartFactory.Create<IStage1Context, ThrowBehavior>();
         }
 
         var ctx = new Stage1Context
@@ -44,21 +44,17 @@ class PipelineTests
             new Stage2Behavior()          // index 2
         };
 
-        var stage2Parts = new[]
+        var parts = new[]
         {
-            BehaviorPartFactory.Create<IStage2Context, Stage2Behavior>(behaviorIndex: 2)
-        };
-
-        var stage1Parts = new[]
-        {
-            BehaviorPartFactory.Create<IStage1Context, Stage1Behavior>(behaviorIndex: 0),
-            StagePartFactory.Create<IStage1Context, IStage2Context, Stage1ToStage2Behavior>(stageIndex: 1, stage2Parts)
+            BehaviorPartFactory.Create<IStage1Context, Stage1Behavior>(), // index 0
+            StagePartFactory.Create<IStage1Context, IStage2Context, Stage1ToStage2Behavior>(childStartIndex: 2, childEndIndex: 3), // index 1
+            BehaviorPartFactory.Create<IStage2Context, Stage2Behavior>() // index 2
         };
 
         var ctx = new Stage1Context
         {
             Behaviors = behaviors
         };
-        await StageRunners.Start(ctx, stage1Parts);
+        await StageRunners.Start(ctx, parts, startIndex: 0, rangeEnd: 2);
     }
 }
