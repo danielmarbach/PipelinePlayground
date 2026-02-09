@@ -193,8 +193,10 @@ public static class BehaviorPartFactory
                 var context = Unsafe.As<BehaviorContext>(ctx);
                 scoped ref var frame = ref context.Frame;
                 var behavior = context.GetBehavior<TBehavior>(frame.Index);
-                return behavior.Invoke(Unsafe.As<TContext>(ctx), StageRunners.Next);
+                return behavior.Invoke(Unsafe.As<TContext>(ctx), Next!);
             };
+
+        private static readonly Func<TContext, Task> Next = StageRunners.Next;
     }
 
     [DebuggerStepThrough]
@@ -225,8 +227,10 @@ public static class StagePartFactory
                 frame.PendingChildEnd = childEnd;
 
                 var behavior = context.GetBehavior<TBehavior>(frame.Index);
-                return behavior.Invoke(Unsafe.As<TInContext>(ctx), Start);
+                return behavior.Invoke(Unsafe.As<TInContext>(ctx), Start!);
             };
+
+        private static readonly Func<TOutContext, Task> Start = StagePartFactory.Start;
     }
 
     [DebuggerStepThrough]
