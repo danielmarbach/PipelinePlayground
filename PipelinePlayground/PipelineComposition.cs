@@ -57,6 +57,6 @@ class PipelineTests
             Behaviors = behaviors,
             Parts = parts
         };
-        await StageRunners.Start(ctx, startIndex: 0, rangeEnd: 2);
+        await StageRunners.Start(ctx);
     }
 }

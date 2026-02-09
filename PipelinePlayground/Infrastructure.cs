@@ -137,8 +137,7 @@ public static class StageRunners
             return Complete(ctx);
         }
 
-        var parts = context.Parts;
-        scoped ref var part = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), startIndex);
+        scoped ref var part = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(context.Parts), startIndex);
         return part.Invoke(ctx, part.ChildStart, part.ChildEnd);
     }
 
@@ -151,7 +150,6 @@ public static class StageRunners
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
         scoped ref var frame = ref context.Frame;
-        var parts = context.Parts;
         var nextIndex = ++frame.Index;
 
         if ((uint)nextIndex >= (uint)frame.RangeEnd)
@@ -159,7 +157,7 @@ public static class StageRunners
             return Complete(ctx);
         }
 
-        scoped ref var part = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), nextIndex);
+        scoped ref var part = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(context.Parts), nextIndex);
         return part.Invoke(ctx, part.ChildStart, part.ChildEnd);
     }
 
@@ -189,16 +187,13 @@ public static class BehaviorPartFactory
         where TContext : class, IBehaviorContext
         where TBehavior : class, IBehavior<TContext, TContext>
     {
-        // Cached delegate to avoid allocation on every invocation
-        private static readonly Func<TContext, Task> Next = static ctx => StageRunners.Next(ctx);
-
         public static readonly Func<IBehaviorContext, int, int, Task> Invoke =
             static (ctx, _, _) =>
             {
                 var context = Unsafe.As<BehaviorContext>(ctx);
                 scoped ref var frame = ref context.Frame;
                 var behavior = context.GetBehavior<TBehavior>(frame.Index);
-                return behavior.Invoke(Unsafe.As<TContext>(ctx), Next);
+                return behavior.Invoke(Unsafe.As<TContext>(ctx), StageRunners.Next);
             };
     }
 
@@ -249,8 +244,7 @@ public static class StagePartFactory
     [DebuggerNonUserCode]
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Task Start<TOutContext>(TOutContext ctx)
-        where TOutContext : class, IBehaviorContext
+    private static Task Start(IBehaviorContext ctx)
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
         scoped ref var frame = ref context.Frame;
