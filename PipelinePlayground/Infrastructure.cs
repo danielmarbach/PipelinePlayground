@@ -229,7 +229,8 @@ public static class StagePartFactory
                 frame.PendingChildStart = childStart;
                 frame.PendingChildEnd = childEnd;
 
-                return context.GetBehavior<TBehavior>(frame.Index).Invoke(Unsafe.As<TInContext>(ctx), Start);
+                var behavior = context.GetBehavior<TBehavior>(frame.Index);
+                return behavior.Invoke(Unsafe.As<TInContext>(ctx), Start);
             };
     }
 
