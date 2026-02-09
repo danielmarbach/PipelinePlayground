@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -189,13 +189,16 @@ public static class BehaviorPartFactory
         where TContext : class, IBehaviorContext
         where TBehavior : class, IBehavior<TContext, TContext>
     {
+        // Cached delegate to avoid allocation on every invocation
+        private static readonly Func<TContext, Task> Next = static ctx => StageRunners.Next(ctx);
+
         public static readonly Func<IBehaviorContext, int, int, Task> Invoke =
             static (ctx, _, _) =>
             {
                 var context = Unsafe.As<BehaviorContext>(ctx);
                 scoped ref var frame = ref context.Frame;
                 var behavior = context.GetBehavior<TBehavior>(frame.Index);
-                return behavior.Invoke(Unsafe.As<TContext>(ctx), StageRunners.Next);
+                return behavior.Invoke(Unsafe.As<TContext>(ctx), Next);
             };
     }
 
@@ -245,7 +248,8 @@ public static class StagePartFactory
     [DebuggerNonUserCode]
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Task Start(IBehaviorContext ctx)
+    private static Task Start<TOutContext>(TOutContext ctx)
+        where TOutContext : class, IBehaviorContext
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
         scoped ref var frame = ref context.Frame;
