@@ -16,16 +16,19 @@ public class BehaviorContext : IBehaviorContext
         if (parent is BehaviorContext parentContext)
         {
             Behaviors = parentContext.Behaviors;
+            Parts = parentContext.Parts;
             Frame = parentContext.Frame;
         }
         else
         {
             Behaviors = [];
+            Parts = [];
             Frame = new PipelineFrame();
         }
     }
 
     internal IBehavior[] Behaviors { get; init; }
+    internal PipelinePart[] Parts { get; init; }
     internal PipelineFrame Frame;
 
     [DebuggerNonUserCode]
@@ -51,7 +54,6 @@ public struct FrameStack
 [SkipLocalsInit]
 public struct PipelineFrame
 {
-    public PipelinePart[] Parts = [];
     public int Index = 0;
     public int RangeEnd = 0;
     public int PendingChildStart = 0;
@@ -112,9 +114,10 @@ public static class StageRunners
     [DebuggerNonUserCode]
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task Start(IBehaviorContext ctx, PipelinePart[] parts)
+    public static Task Start(IBehaviorContext ctx)
     {
-        return Start(ctx, parts, startIndex: 0, rangeEnd: parts.Length);
+        var context = Unsafe.As<BehaviorContext>(ctx);
+        return Start(ctx, startIndex: 0, rangeEnd: context.Parts.Length);
     }
 
     [DebuggerStepThrough]
@@ -122,11 +125,10 @@ public static class StageRunners
     [DebuggerNonUserCode]
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task Start(IBehaviorContext ctx, PipelinePart[] parts, int startIndex, int rangeEnd)
+    public static Task Start(IBehaviorContext ctx, int startIndex, int rangeEnd)
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
         scoped ref var frame = ref context.Frame;
-        frame.Parts = parts;
         frame.Index = startIndex;
         frame.RangeEnd = rangeEnd;
 
@@ -135,6 +137,7 @@ public static class StageRunners
             return Complete(ctx);
         }
 
+        var parts = context.Parts;
         scoped ref var part = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(parts), startIndex);
         return part.Invoke(ctx, part.ChildStart, part.ChildEnd);
     }
@@ -148,7 +151,7 @@ public static class StageRunners
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
         scoped ref var frame = ref context.Frame;
-        var parts = frame.Parts;
+        var parts = context.Parts;
         var nextIndex = ++frame.Index;
 
         if ((uint)nextIndex >= (uint)frame.RangeEnd)
@@ -260,7 +263,7 @@ public static class StagePartFactory
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
         scoped ref var frame = ref context.Frame;
-        return StageRunners.Start(context, frame.Parts, frame.PendingChildStart, frame.PendingChildEnd);
+        return StageRunners.Start(context, frame.PendingChildStart, frame.PendingChildEnd);
     }
 }
 

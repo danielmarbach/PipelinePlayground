@@ -29,9 +29,10 @@ class PipelineTests
 
         var ctx = new Stage1Context
         {
-            Behaviors = behaviors
+            Behaviors = behaviors,
+            Parts = parts,
         };
-        await StageRunners.Start(ctx, parts);
+        await StageRunners.Start(ctx);
     }
 
     [Test]
@@ -53,8 +54,9 @@ class PipelineTests
 
         var ctx = new Stage1Context
         {
-            Behaviors = behaviors
+            Behaviors = behaviors,
+            Parts = parts
         };
-        await StageRunners.Start(ctx, parts, startIndex: 0, rangeEnd: 2);
+        await StageRunners.Start(ctx, startIndex: 0, rangeEnd: 2);
     }
 }
