@@ -41,68 +41,15 @@ public class BehaviorContext : IBehaviorContext
             Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Behaviors), index));
 }
 
-public readonly record struct FrameSnapshot(int Index, int RangeEnd);
-
-[InlineArray(MaxDepth)]
-public struct FrameStack
-{
-    public const int MaxDepth = 8; // this is well known
-
-    private FrameSnapshot _element0;
-}
-
 [SkipLocalsInit]
 public struct PipelineFrame
 {
     public int Index = 0;
     public int RangeEnd = 0;
-    public int PendingChildStart = 0;
-    public int PendingChildEnd = 0;
-
-    private FrameStack stack = default;
-    private int stackDepth = 0;
 
     public PipelineFrame()
     {
     }
-
-    [DebuggerNonUserCode]
-    [DebuggerStepThrough]
-    [DebuggerHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Push(int index, int rangeEnd)
-    {
-        var d = stackDepth;
-        if ((uint)d >= FrameStack.MaxDepth)
-        {
-            ThrowOverflow();
-        }
-
-        stack[d] = new FrameSnapshot(index, rangeEnd);
-        stackDepth = d + 1;
-    }
-
-    [DebuggerNonUserCode]
-    [DebuggerStepThrough]
-    [DebuggerHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryPop(out FrameSnapshot snapshot)
-    {
-        var d = stackDepth;
-        if (d == 0)
-        {
-            snapshot = default;
-            return false;
-        }
-
-        d--;
-        snapshot = stack[d];
-        stackDepth = d;
-        return true;
-    }
-
-    [DoesNotReturn]
-    private static void ThrowOverflow() => throw new InvalidOperationException($"Pipeline frame stack overflow. MaxDepth={FrameStack.MaxDepth}.");
 }
 
 public readonly record struct PipelinePart(Func<IBehaviorContext, int, int, Task> Invoke, int ChildStart = 0, int ChildEnd = 0);
@@ -117,27 +64,16 @@ public static class StageRunners
     public static Task Start(IBehaviorContext ctx)
     {
         var context = Unsafe.As<BehaviorContext>(ctx);
-        return Start(ctx, startIndex: 0, rangeEnd: context.Parts.Length);
-    }
-
-    [DebuggerStepThrough]
-    [DebuggerHidden]
-    [DebuggerNonUserCode]
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Task Start(IBehaviorContext ctx, int startIndex, int rangeEnd)
-    {
-        var context = Unsafe.As<BehaviorContext>(ctx);
         scoped ref var frame = ref context.Frame;
-        frame.Index = startIndex;
-        frame.RangeEnd = rangeEnd;
+        frame.Index = 0;
+        frame.RangeEnd = context.Parts.Length;
 
-        if (startIndex >= rangeEnd)
+        if (context.Parts.Length == 0)
         {
-            return Complete(ctx);
+            return Task.CompletedTask;
         }
 
-        scoped ref var part = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(context.Parts), startIndex);
+        scoped ref var part = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(context.Parts), 0);
         return part.Invoke(ctx, part.ChildStart, part.ChildEnd);
     }
 
@@ -154,30 +90,11 @@ public static class StageRunners
 
         if ((uint)nextIndex >= (uint)frame.RangeEnd)
         {
-            return Complete(ctx);
+            return Task.CompletedTask;
         }
 
         scoped ref var part = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(context.Parts), nextIndex);
         return part.Invoke(ctx, part.ChildStart, part.ChildEnd);
-    }
-
-    [DebuggerStepThrough]
-    [DebuggerHidden]
-    [DebuggerNonUserCode]
-    [StackTraceHidden]
-    static Task Complete(IBehaviorContext ctx)
-    {
-        var context = Unsafe.As<BehaviorContext>(ctx);
-        scoped ref var frame = ref context.Frame;
-        if (!frame.TryPop(out var frameSnapshot))
-        {
-            return Task.CompletedTask;
-        }
-
-        frame.Index = frameSnapshot.Index;
-        frame.RangeEnd = frameSnapshot.RangeEnd;
-
-        return Next(ctx);
     }
 }
 
@@ -217,20 +134,16 @@ public static class StagePartFactory
         where TBehavior : class, IBehavior<TInContext, TOutContext>
     {
         public static readonly Func<IBehaviorContext, int, int, Task> Invoke =
-            static (ctx, childStart, childEnd) =>
+            static (ctx, childStart, _) =>
             {
                 var context = Unsafe.As<BehaviorContext>(ctx);
                 scoped ref var frame = ref context.Frame;
-
-                frame.Push(frame.Index, frame.RangeEnd);
-                frame.PendingChildStart = childStart;
-                frame.PendingChildEnd = childEnd;
-
                 var behavior = context.GetBehavior<TBehavior>(frame.Index);
+                frame.Index = childStart - 1; // -1 because Next() increments before dispatch
                 return behavior.Invoke(Unsafe.As<TInContext>(ctx), Start!);
             };
 
-        private static readonly Func<TOutContext, Task> Start = StagePartFactory.Start;
+        private static readonly Func<TOutContext, Task> Start = StageRunners.Next;
     }
 
     [DebuggerStepThrough]
@@ -242,18 +155,6 @@ public static class StagePartFactory
         where TOutContext : class, IBehaviorContext
         where TBehavior : class, IBehavior<TInContext, TOutContext>
         => new(Cache<TInContext, TOutContext, TBehavior>.Invoke, childStartIndex, childEndIndex);
-
-    [DebuggerStepThrough]
-    [DebuggerHidden]
-    [DebuggerNonUserCode]
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Task Start(IBehaviorContext ctx)
-    {
-        var context = Unsafe.As<BehaviorContext>(ctx);
-        scoped ref var frame = ref context.Frame;
-        return StageRunners.Start(context, frame.PendingChildStart, frame.PendingChildEnd);
-    }
 }
 
 public interface IStage1Context : IBehaviorContext;
